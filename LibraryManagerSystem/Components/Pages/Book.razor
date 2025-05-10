@@ -1,0 +1,292 @@
+﻿@page "/Books"
+@* attribute [StreamRendering]*@
+@rendermode InteractiveServer
+
+@using Business
+@using Bussiness
+@using DomainModels
+@using Bussiness.Common
+@using AutoMapper
+@using Business.Dtos
+@using Radzen
+@using Radzen.Blazor
+@using LibraryManagerSystem.Components.Layout
+@using LibraryManagerSystem.Components.Pages
+
+@inject IMapper mapper
+@inject IBookManager manager
+
+@* @inject MessageService messageService *@
+
+@using Microsoft.AspNetCore.Components.QuickGrid
+
+<style>
+    body {
+    overflow-x: auto;
+    }
+
+    .scrollable-grid-container {
+    max-width: 100%;
+    overflow: auto;
+    border: 1px solid #ddd;
+    }
+
+    .rz-data-grid {
+    max-width: auto;
+    }
+</style>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <RadzenTextBox @bind-Value="errorMessage" ReadOnly="true" Style="width:100%; color:red" />
+}
+
+<RadzenDataGrid @ref="booksGrid" AllowAlternatingRows ="false" AllowFiltering="true" AllowPaging="true" PageSize="5" AllowSorting="true" EditMode="@editMode"
+Data="@books" TItem="BookDto" RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow" Sort="@Reset" Page="@Reset" Filter="@Reset" ColumnWidth="150px"
+SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedBook RowSelect="@OnBookSelectionChange" Style="overflow-x: scroll;">
+    <HeaderTemplate>
+        <RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle" Text="Add New Book" Click="@InsertRow" Disabled="false" Style="width: 150px;" />
+    </HeaderTemplate>
+
+    <Columns>
+        
+        <RadzenDataGridColumn Property="@nameof(BookDto.Title)" Title="Title">
+            <EditTemplate Context="book">
+                <RadzenTextBox @bind-Value="book.Title" Style="width:80px; display: block" Name="BookTitle" aria-laberl="Enter book title" />
+                <RadzenRequiredValidator Text="BookTitle is required" Component="BookTitle" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.Description)" Title="Description">
+            <EditTemplate Context="book">
+                <RadzenTextBox @bind-Value="book.Description" Style="width:80px; display: block" Name="BookDescription" aria-laberl="Enter book description" />
+                <RadzenRequiredValidator Text="BookDescription is required" Component="BookDescription" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.Author)" Title="Author">
+            <EditTemplate Context="book">
+                <RadzenTextBox @bind-Value="book.Author" Style="width:80px; display: block" Name="BookAuthor" aria-laberl="Enter book author" />
+                <RadzenRequiredValidator Text="BookAuthor is required" Component="BookAuthor" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.Genre)" Title="Genre">
+            <EditTemplate Context="book">
+                <RadzenTextBox @bind-Value="book.Genre" Style="width:80px; display: block" Name="BookGenre" aria-laberl="Enter book genre" />
+                <RadzenRequiredValidator Text="BookGenre is required" Component="BookGenre" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.ISBN)" Title="ISBN">
+            <EditTemplate Context="book">
+                <RadzenTextBox @bind-Value="book.ISBN" Style="width:80px; display: block" Name="BookISBN" ISBN-laberl="Enter book ISBN" />
+                <RadzenRequiredValidator Text="BookISBN is required" Component="BookISBN" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.MaxQuantity)" title="MaxQuantity" Width="100px">
+            <Template Context="book">
+                @book.MaxQuantity
+            </Template>
+            <EditTemplate Context="book">
+                <RadzenNumeric @bind-Value="book.MaxQuantity" Style="width:50%" InputAttributes="@(new Dictionary<string,object>(){ { "aria-label", "Select MaxQuantity" }})" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.AvailableQuantity)" title="Avail. No" Width="100px">
+            <Template Context="book">
+                @book.AvailableQuantity
+            </Template>
+            <EditTemplate Context="book">
+                <RadzenNumeric @bind-Value="book.AvailableQuantity" Style="width:50%" InputAttributes="@(new Dictionary<string,object>(){ { "aria-label", "Select AvailableQuantity" }})" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.NumberOfReturnDays)" title="Return Days" Width="100px">
+            <Template Context="book">
+                @book.NumberOfReturnDays
+            </Template>
+            <EditTemplate Context="book">
+                <RadzenNumeric @bind-Value="book.NumberOfReturnDays" Style="width:50%" InputAttributes="@(new Dictionary<string,object>(){ { "aria-label", "Select NumberOfReturnDays" }})" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Context="book" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Frozen="true" FrozenPosition="FrozenColumnPosition.Right">
+            <Template Context="book">
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="rz-my-1 rz-ms-1" Click="@(args => EditRow(book))" @onclick:stopPropagation="true" />
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" Size="ButtonSize.Medium" Shade="Shade.Lighter" class="rz-my-1 rz-ms-1" Click="@(args => DeleteRow(book))" @onclick:stopPropagation="true" />
+            </Template>
+            <EditTemplate Context="book">
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(book))" aria-label="Save" />
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="rz-my-1 rz-ms-1" Click="@((args) => CancelEdit(book))" aria-label="Cancel" />
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" Size="ButtonSize.Medium" Shade="Shade.Lighter" class="rz-my-1 rz-ms-1" Click="@(args => DeleteRow(book))" aria-label="Delete" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+            
+    </Columns>
+
+</RadzenDataGrid>
+
+@code
+{
+    RadzenDataGrid<BookDto> booksGrid;
+    IList<BookDto> books;
+    BookDto originalBook;
+    IList<BookDto> selectedBook;
+
+    DataGridEditMode editMode = DataGridEditMode.Single;
+
+    private Dictionary<int, BookDto> originalBooks = new Dictionary<int, BookDto>();
+
+    private string errorMessage;
+
+    void Reset()
+    {
+    }
+
+    void Reset(BookDto book)
+    {
+    }
+
+    async Task EditRow(BookDto book)
+    {
+        try
+        {
+            if (!booksGrid.IsValid) return;
+
+            originalBook = mapper.Map<BookDto>(book);
+            await booksGrid.EditRow(book);
+            await booksGrid.Reload();
+            StateHasChanged();
+        }
+        catch (BusinessException ex)
+        {
+            mapper.Map(originalBook, book);
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    async Task DeleteRow(BookDto book)
+    {
+        try
+        {
+            if (books.Contains(book))
+            {
+                this.manager.Delete(book.Id);
+                books.Remove(book);
+                StateHasChanged();
+                await booksGrid.Reload();
+            }
+            else
+            {
+                booksGrid.CancelEditRow(book);
+            }
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    async Task CancelEdit(BookDto book)
+    {
+        try
+        {
+            if (book.Id != 0)
+            {
+                booksGrid.CancelEditRow(book);
+                mapper.Map(originalBook, book);
+            }
+            else
+            {
+                books.Remove(book);
+            }
+            await booksGrid.Reload();
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        books = this.manager.GetAllBooks().ToList();
+    }
+
+    async Task SaveRow(BookDto book)
+    {
+        try
+        {
+            await booksGrid.UpdateRow(book);
+        }
+        catch (BusinessException ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+
+            mapper.Map(originalBook, book);
+            await booksGrid.EditRow(book);            
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);            
+        }
+    }
+
+    async Task InsertRow()
+    {       
+        try
+        {
+            this.errorMessage = null;
+
+            if (!booksGrid.IsValid) return;
+
+            var book = this.manager.InitializeNewItem();
+            books.Add(book);
+            await booksGrid.InsertRow(book);            
+        }
+        catch (BusinessException ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+            var book = this.manager.InitializeNewItem();
+            mapper.Map(originalBook, book);
+            await booksGrid.EditRow(book);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }        
+    }
+
+    void OnCreateRow(BookDto book)
+    {        
+        Reset(book);
+        var dtoAdded = this.manager.Add(book);
+        books.Remove(book);
+
+        books.Add(dtoAdded);
+        StateHasChanged();
+        booksGrid.Reload();        
+    }
+
+    async void OnUpdateRow(BookDto book)
+    {        
+        Reset(book);
+        this.manager.Update(book);
+        books.Remove(book);
+
+        book = this.manager.GetById(book.Id);
+
+        books.Add(book);
+        StateHasChanged();
+        await booksGrid.Reload();        
+    }
+
+    void OnBookSelectionChange() { }
+}

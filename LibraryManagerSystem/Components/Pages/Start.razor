@@ -1,0 +1,43 @@
+﻿@page "/"
+@rendermode InteractiveServer
+
+@using Bussiness
+
+@inject IDatabaseManager dbManager
+@inject IJSRuntime jsRuntime
+
+<PageTitle>Start</PageTitle>
+
+<h1>Manage Database...</h1>
+
+<button class="btn btn-primary" @onclick="@(() => CreateDB())" style="width:fit-content">CreateTables</button>
+<button class="btn btn-primary" @onclick="@(() => DropTables())" style="width:fit-content">DropTables</button>
+
+@code
+{
+    private void CreateDB()
+    {
+        try
+        {
+            this.dbManager.CreateTables();
+            jsRuntime.InvokeVoidAsync("alert", "DB created!");
+        }
+        catch (Exception ex)
+        {
+            jsRuntime.InvokeVoidAsync("alert", ex.Message);
+        }
+    }
+
+    private void DropTables()
+    {
+        try
+        {
+            this.dbManager.DeleteTables();
+            jsRuntime.InvokeVoidAsync("alert", "DB dropped!");
+        }
+        catch (Exception ex)
+        {
+            jsRuntime.InvokeVoidAsync("alert", ex.Message);
+        }
+    }
+}

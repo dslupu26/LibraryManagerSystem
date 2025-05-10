@@ -1,0 +1,257 @@
+﻿@page "/BookSearch"
+@* attribute [StreamRendering]*@
+@rendermode InteractiveServer
+
+@using Business
+@using Bussiness
+@using DomainModels
+@using Bussiness.Common
+@using AutoMapper
+@using Business.Dtos
+@using Radzen
+@using Radzen.Blazor
+@using LibraryManagerSystem.Components.Layout
+@using LibraryManagerSystem.Components.Pages
+
+@inject IMapper mapper
+@inject IBookManager manager
+
+@* @inject MessageService messageService *@
+
+@using Microsoft.AspNetCore.Components.QuickGrid
+
+<style>
+    body {
+    overflow-x: auto;
+    }
+
+    .scrollable-grid-container {
+    max-width: 100%;
+    overflow: auto;
+    border: 1px solid #ddd;
+    }
+
+    .rz-data-grid {
+    max-width: auto;
+    }
+</style>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <RadzenTextBox @bind-Value="errorMessage" ReadOnly="true" Style="width:100%; color:red" />
+}
+
+<div class="row" style="margin-bottom: 20px;">
+    <div class="col">
+        <label>Title</label>
+        <RadzenTextBox @bind-Value="searchTitle" Style="width: 100%;" Placeholder="Search by Title" />
+    </div>
+    <div class="col">
+        <label>Author</label>
+        <RadzenTextBox @bind-Value="searchAuthor" Style="width: 100%;" Placeholder="Search by Author" />
+    </div>
+    <div class="col">
+        <label>Genre</label>
+        <RadzenTextBox @bind-Value="searchGenre" Style="width: 100%;" Placeholder="Search by Genre" />
+    </div>
+    <div class="col">
+        <label>ISBN</label>
+        <RadzenTextBox @bind-Value="searchISBN" Style="width: 100%;" Placeholder="Search by ISBN" />
+    </div>
+    <div class="col" style="margin-top: 24px;">
+        <RadzenButton Text="Search" Click="@SearchBooks" Icon="search" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Reset" Click="@OnResetClicked" Icon="refresh" ButtonStyle="ButtonStyle.Light" />
+    </div>
+</div>
+
+<RadzenDataGrid @ref="booksGrid" AllowAlternatingRows="false" AllowFiltering="true" AllowPaging="true" PageSize="5" AllowSorting="true" EditMode="@editMode"
+                Data="@books" TItem="BookDto" RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow" Sort="@Reset" Page="@Reset" Filter="@Reset" ColumnWidth="150px"
+                SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedBook RowSelect="@OnBookSelectionChange" Style="overflow-x: scroll;">
+
+
+    <Columns>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.Title)" Title="Title">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.Description)" Title="Description">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.Author)" Title="Author">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.Genre)" Title="Genre">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.ISBN)" Title="ISBN">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.MaxQuantity)" title="MaxQuantity" Width="100px">
+            <Template Context="book">
+                @book.MaxQuantity
+            </Template>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.AvailableQuantity)" title="Avail. No" Width="100px">
+            <Template Context="book">
+                @book.AvailableQuantity
+            </Template>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(BookDto.NumberOfReturnDays)" title="Return Days" Width="100px">
+            <Template Context="book">
+                @book.NumberOfReturnDays
+            </Template>
+        </RadzenDataGridColumn>
+
+    </Columns>
+</RadzenDataGrid>
+
+@code
+{
+    RadzenDataGrid<BookDto> booksGrid;
+    IList<BookDto> books;
+    BookDto originalBook;
+    IList<BookDto> selectedBook;
+
+    private string searchTitle;
+    private string searchAuthor;
+    private string searchGenre;
+    private string searchISBN;
+
+    DataGridEditMode editMode = DataGridEditMode.Single;
+
+    private Dictionary<int, BookDto> originalBooks = new Dictionary<int, BookDto>();
+
+    private string errorMessage;
+
+    void Reset()
+    {
+    }
+
+    void Reset(BookDto book)
+    {
+    }
+
+    async Task DeleteRow(BookDto book)
+    {
+        try
+        {
+            if (books.Contains(book))
+            {
+                this.manager.Delete(book.Id);
+                books.Remove(book);
+                StateHasChanged();
+                await booksGrid.Reload();
+            }
+            else
+            {
+                booksGrid.CancelEditRow(book);
+            }
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        books = this.manager.GetAllBooks().ToList();
+    }
+
+    async Task SaveRow(BookDto book)
+    {
+        try
+        {
+            await booksGrid.UpdateRow(book);
+        }
+        catch (BusinessException ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+
+            mapper.Map(originalBook, book);
+            await booksGrid.EditRow(book);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    async Task InsertRow()
+    {
+        try
+        {
+            this.errorMessage = null;
+
+            if (!booksGrid.IsValid) return;
+
+            var book = this.manager.InitializeNewItem();
+            books.Add(book);
+            await booksGrid.InsertRow(book);
+        }
+        catch (BusinessException ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+            var book = this.manager.InitializeNewItem();
+            mapper.Map(originalBook, book);
+            await booksGrid.EditRow(book);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    void OnCreateRow(BookDto book)
+    {
+        Reset(book);
+        var dtoAdded = this.manager.Add(book);
+        books.Remove(book);
+
+        books.Add(dtoAdded);
+        StateHasChanged();
+        booksGrid.Reload();
+    }
+
+    async void OnUpdateRow(BookDto book)
+    {
+        Reset(book);
+        this.manager.Update(book);
+        books.Remove(book);
+
+        book = this.manager.GetById(book.Id);
+
+        books.Add(book);
+        StateHasChanged();
+        await booksGrid.Reload();
+    }
+
+    void OnResetClicked()
+    {
+        searchTitle = string.Empty;
+        searchAuthor = string.Empty;
+        searchGenre = string.Empty;
+        searchISBN = string.Empty;
+
+        books = manager.GetAllBooks().ToList();
+    }
+
+    void SearchBooks()
+    {
+        books = manager.GetAllBooks()
+            .Where(b =>
+                (string.IsNullOrEmpty(searchTitle) || b.Title.Contains(searchTitle, StringComparison.OrdinalIgnoreCase)) &&
+                (string.IsNullOrEmpty(searchAuthor) || b.Author.Contains(searchAuthor, StringComparison.OrdinalIgnoreCase)) &&
+                (string.IsNullOrEmpty(searchGenre) || b.Genre.Contains(searchGenre, StringComparison.OrdinalIgnoreCase)) &&
+                (string.IsNullOrEmpty(searchISBN) || b.ISBN.Contains(searchISBN, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+    }
+
+
+    void OnBookSelectionChange() { }
+}

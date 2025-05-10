@@ -1,0 +1,170 @@
+﻿@page "/Rents"
+@* attribute [StreamRendering]*@
+@rendermode InteractiveServer
+
+@using Business
+@using Bussiness
+@using DomainModels
+@using Bussiness.Common
+@using AutoMapper
+@using Business.Dtos
+@using Radzen
+@using Radzen.Blazor
+@using LibraryManagerSystem.Components.Layout
+@using LibraryManagerSystem.Components.Pages
+
+@inject IMapper mapper
+@inject IRentManager manager
+
+@using Microsoft.AspNetCore.Components.QuickGrid
+
+<style>
+    body {
+        overflow-x: auto;
+    }
+
+    .scrollable-grid-container {
+        max-width: 100%;
+        overflow: auto;
+        border: 1px solid #ddd;
+    }
+
+    .rz-data-grid {
+        max-width: auto;
+    }
+</style>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <RadzenTextBox @bind-Value="errorMessage" ReadOnly="true" Style="width:100%;color:red" />
+}
+ <div class="row" style="margin-bottom: 20px;">
+
+    <div class="col">
+        <label>ISBN</label>
+        <RadzenTextBox @bind-Value="isbn" Style="width: 100%;" Placeholder="Insert book ISBN" />
+    </div>
+
+    <div class="col">
+        <label>Code</label>
+        <RadzenNumeric @bind-Value="customerCode" Style="width: 100%;" Placeholder="Insert customer code" />
+    </div>
+
+    <div class="col" style="margin-top: 24px;">
+        <RadzenButton Text="Rent" Click="@RentBook" Icon="shopping_cart" Style="margin-top: 8px;" />
+        <RadzenButton Text="Return" Click="@ReturnBook" Icon="keyboard_return" ButtonStyle="ButtonStyle.Secondary" />
+        <RadzenButton Text="Late" Click="@ShowLateRents" Icon="warning" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Reset" Click="@Refresh" Icon="refresh" ButtonStyle="ButtonStyle.Light" />
+    </div>
+</div>
+
+<RadzenDataGrid @ref="rentsGrid" AllowAlternatingRows="false" AllowFiltering="true" AllowPaging="true" PageSize="5" AllowSorting="true" EditMode="@editMode"
+                Data="@rents" TItem="RentDto" Sort="@Reset" Page="@Reset" Filter="@Reset" ColumnWidth="150px"
+                SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedRent Style="overflow-x: scroll;">
+
+    <Columns>
+
+        <RadzenDataGridColumn Property="@nameof(RentDto.CustomerName)" Title="Customer Name">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(RentDto.CustomerCode)" Title="Customer Code">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(RentDto.BookTitle)" Title="Title">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(RentDto.ISBN)" Title="ISBN">
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(RentDto.ReturnDate)" Title="ReturnDate">
+        </RadzenDataGridColumn>
+
+    </Columns>
+</RadzenDataGrid>
+
+@code
+{
+    RadzenDataGrid<RentDto> rentsGrid;
+    IList<RentDto> rents;
+    IList<RentDto> selectedRent;
+
+    private string isbn;
+    private int customerCode;
+
+    DataGridEditMode editMode = DataGridEditMode.Single;
+
+    private Dictionary<int, RentDto> originalRents = new Dictionary<int, RentDto>();
+
+    private string errorMessage;
+
+    void Reset()
+    {
+    }
+
+    void Reset(RentDto rent)
+    {
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        rents = this.manager.GetAllRents().ToList();
+    }
+
+    void Refresh()
+    {
+        rents = manager.GetAllRents().ToList();
+    }
+
+    void ShowLateRents()
+    {
+        rents = manager.GetAllLateRents().ToList();
+    }
+
+    void RentBook()
+    {
+        try
+        {
+            this.errorMessage = string.Empty;
+            manager.RentBook(customerCode, isbn);
+            rents = this.manager.GetAllRents().ToList();
+        }
+        catch (BusinessException ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }        
+    }
+
+    void ReturnBook()
+    {
+        try
+        {
+            this.errorMessage = string.Empty;
+            if (selectedRent == null || !selectedRent.Any())
+            {
+                throw new BusinessException("No rent selected!");
+            }
+
+            var selected = selectedRent.FirstOrDefault();
+            if(selected == null)
+            {
+                throw new BusinessException("No rent selected!");
+            }            
+            manager.ReturnBook(selected.Id);
+            selectedRent = null;
+            rents = this.manager.GetAllRents().ToList();
+        }
+        catch (BusinessException ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+}

@@ -1,0 +1,281 @@
+﻿@page "/Customers"
+@* attribute [StreamRendering]*@
+@rendermode InteractiveServer
+
+@using Business
+@using Bussiness
+@using DomainModels
+@using Bussiness.Common
+@using AutoMapper
+@using Business.Dtos
+@using Radzen
+@using Radzen.Blazor
+@using LibraryManagerSystem.Components.Layout
+@using LibraryManagerSystem.Components.Pages
+
+@inject IMapper mapper
+@inject ICustomerManager manager
+
+@* @inject MessageService messageService *@
+
+@using Microsoft.AspNetCore.Components.QuickGrid
+
+<style>
+    body {
+        overflow-x: auto;
+    }
+
+    .scrollable-grid-container {
+        max-width: 100%;
+        overflow: auto;
+        border: 1px solid #ddd;
+    }
+
+    .rz-data-grid {
+        max-width: auto;
+    }
+</style>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <RadzenTextBox @bind-Value="errorMessage" ReadOnly="true" Style="width:100%; color:red" />
+}
+
+<RadzenDataGrid @ref="customersGrid" AllowAlternatingRows="false" AllowFiltering="true" AllowPaging="true" PageSize="5" AllowSorting="true" EditMode="@editMode"
+                Data="@customers" TItem="CustomerDto" RowUpdate="@OnUpdateRow" RowCreate="@OnCreateRow" Sort="@Reset" Page="@Reset" Filter="@Reset" ColumnWidth="150px"
+                SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedCustomer RowSelect="@OnCustomerSelectionChange" Style="overflow-x: scroll;">
+    <HeaderTemplate>
+        <RadzenButton ButtonStyle="ButtonStyle.Success" Icon="add_circle" Text="Add New Customer" Click="@InsertRow" Disabled="false" Style="width: 150px;" />
+    </HeaderTemplate>
+
+    <Columns>
+
+        <RadzenDataGridColumn Property="@nameof(CustomerDto.CustomerCode)" title="CustomerCode" Width="100px">
+            <Template Context="customer">
+                @customer.CustomerCode
+            </Template>
+            <EditTemplate Context="customer">
+                <RadzenNumeric @bind-Value="customer.CustomerCode" Style="width:50%" InputAttributes="@(new Dictionary<string,object>(){ { "aria-label", "Select CustomerCode" }})" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(CustomerDto.Name)" Title="Name">
+            <EditTemplate Context="customer">
+                <RadzenTextBox @bind-Value="customer.Name" Style="width:80px; display: block" Name="CustomerName" aria-laberl="Enter customer name" />
+                <RadzenRequiredValidator Text="CustomerName is required" Component="CustomerName" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(CustomerDto.Address)" Title="Adress">
+            <EditTemplate Context="customer">
+                <RadzenTextBox @bind-Value="customer.Address" Style="width:80px; display: block" Name="CustomerAdress" aria-laberl="Enter customer address" />
+                <RadzenRequiredValidator Text="CustomerAddress is required" Component="CustomerAdress" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(CustomerDto.City)" Title="City">
+            <EditTemplate Context="customer">
+                <RadzenTextBox @bind-Value="customer.City" Style="width:80px; display: block" Name="CustomerCity" aria-laberl="Enter customer city" />
+                <RadzenRequiredValidator Text="CustomerCity is required" Component="CustomerCity" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(CustomerDto.Email)" Title="Email">
+            <EditTemplate Context="customer">
+                <RadzenTextBox @bind-Value="customer.Email" Style="width:80px; display: block" Name="CustomerEmail" aria-laberl="Enter customer email" />
+                <RadzenRequiredValidator Text="CustomerEmail is required" Component="CustomerEmail" Popup="true" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Property="@nameof(CustomerDto.TrustValue)" Title="Trust Value" Width="280px">
+            <EditTemplate Context="customer">
+                <RadzenDropDown @bind-Value="customer.TrustValue"
+                                Data="@(Enum.GetValues(typeof(DomainModels.TrustValueEnum))
+                                .Cast<DomainModels.TrustValueEnum>()
+                                .Select(e => new { Id = e.ToString(), Name = e.ToString() })
+                                .ToList())"
+                                TextProperty="Name"
+                                ValueProperty="Id"
+                                Style="width:100%; display: block;"
+                                InputAttributes="@(new Dictionary<string, object>(){ { "aria-label", "Select Trust Value" }})" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Context="customer" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Frozen="true" FrozenPosition="FrozenColumnPosition.Right">
+            <Template Context="customer">
+                <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="rz-my-1 rz-ms-1" Click="@(args => EditRow(customer))" @onclick:stopPropagation="true" />
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" Size="ButtonSize.Medium" Shade="Shade.Lighter" class="rz-my-1 rz-ms-1" Click="@(args => DeleteRow(customer))" @onclick:stopPropagation="true" />
+            </Template>
+            <EditTemplate Context="customer">
+                <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(customer))" aria-label="Save" />
+                <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="rz-my-1 rz-ms-1" Click="@((args) => CancelEdit(customer))" aria-label="Cancel" />
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat" Size="ButtonSize.Medium" Shade="Shade.Lighter" class="rz-my-1 rz-ms-1" Click="@(args => DeleteRow(customer))" aria-label="Delete" />
+            </EditTemplate>
+        </RadzenDataGridColumn>
+
+    </Columns>
+
+</RadzenDataGrid>
+
+@code
+{
+    RadzenDataGrid<CustomerDto> customersGrid;
+    IList<CustomerDto> customers;
+    CustomerDto originalCustomer;
+    IList<CustomerDto> selectedCustomer;
+
+    DataGridEditMode editMode = DataGridEditMode.Single;
+
+    private Dictionary<int, CustomerDto> originalCustomers = new Dictionary<int, CustomerDto>();
+
+    private string errorMessage;
+
+    void Reset()
+    {
+    }
+
+    void Reset(CustomerDto customer)
+    {
+    }
+
+    async Task EditRow(CustomerDto customer)
+    {
+        try
+        {
+            if (!customersGrid.IsValid) return;
+
+            originalCustomer = mapper.Map<CustomerDto>(customer);
+            await customersGrid.EditRow(customer);
+            await customersGrid.Reload();
+            StateHasChanged();
+        }
+        catch (BusinessException ex)
+        {
+            mapper.Map(originalCustomer, customer);
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    async Task DeleteRow(CustomerDto customer)
+    {
+        try
+        {
+            if (customers.Contains(customer))
+            {
+                this.manager.Delete(customer.Id);
+                customers.Remove(customer);
+                StateHasChanged();
+                await customersGrid.Reload();
+            }
+            else
+            {
+                customersGrid.CancelEditRow(customer);
+            }
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    async Task CancelEdit(CustomerDto customer)
+    {
+        try
+        {
+            if (customer.Id != 0)
+            {
+                customersGrid.CancelEditRow(customer);
+                mapper.Map(originalCustomer, customer);
+            }
+            else
+            {
+                customers.Remove(customer);
+            }
+            await customersGrid.Reload();
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        customers = this.manager.GetAllCustomers().ToList();
+    }
+
+    async Task SaveRow(CustomerDto customer)
+    {
+        try
+        {
+            await customersGrid.UpdateRow(customer);
+        }
+        catch (BusinessException ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+
+            mapper.Map(originalCustomer, customer);
+            await customersGrid.EditRow(customer);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    async Task InsertRow()
+    {
+        try
+        {
+            this.errorMessage = null;
+
+            if (!customersGrid.IsValid) return;
+
+            var customer = this.manager.InitializeNewItem();
+            customers.Add(customer);
+            await customersGrid.InsertRow(customer);
+        }
+        catch (BusinessException ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+            var customer = this.manager.InitializeNewItem();
+            mapper.Map(originalCustomer, customer);
+            await customersGrid.EditRow(customer);
+        }
+        catch (Exception ex)
+        {
+            this.errorMessage = PrepareException.Prepare(ex);
+        }
+    }
+
+    void OnCreateRow(CustomerDto customer)
+    {
+        Reset(customer);
+        var dtoAdded = this.manager.Add(customer);
+        customers.Remove(customer);
+
+        customers.Add(dtoAdded);
+        StateHasChanged();
+        customersGrid.Reload();
+    }
+
+    async void OnUpdateRow(CustomerDto customer)
+    {
+        Reset(customer);
+        this.manager.Update(customer);
+        customers.Remove(customer);
+
+        customer = this.manager.GetById(customer.Id);
+
+        customers.Add(customer);
+        StateHasChanged();
+        await customersGrid.Reload();
+    }
+
+    void OnCustomerSelectionChange() { }
+}
